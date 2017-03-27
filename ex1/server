@@ -1,0 +1,98 @@
+#include<Winsock2.h>
+#include<stdio.h>
+#include<iostream>
+#include<stdlib.h>
+#define DEFAULT_PORT 5051
+#define BUFFER_LENGTH 1024
+using namespace std;
+#pragma comment(lib,"ws2_32.lib")
+void main()
+{
+	int iPort = DEFAULT_PORT;
+	WSADATA wsaData;
+	SOCKET sListen,
+		sAccept;
+	int iLen;
+	int iSend;
+	int iRecv;
+	char send_user[] = "应镕嵘";
+	char recv_user[] = "王岑";
+	char send_buf[BUFFER_LENGTH];
+	char recv_buf[BUFFER_LENGTH];
+
+	struct sockaddr_in ser, cli;
+	printf("-------------------\n");
+	printf("Sever waiting\n");
+	printf("-------------------\n");
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf("Failed to load winsock.\n");
+		return;
+	}
+
+	//创建服务器端套接口
+	sListen = socket(AF_INET, SOCK_STREAM, 0);
+	if (sListen == INVALID_SOCKET)
+	{
+		printf("socket() Failed:%d\n", WSAGetLastError());
+		return;
+	}
+
+
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sListen, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind()Failed:%d\n", WSAGetLastError());
+		return;
+	}
+
+	//进入监听状态
+	if (listen(sListen, 5) == SOCKET_ERROR)
+	{
+		printf("listen()Failed:%d\n", WSAGetLastError());
+		return;
+	}
+	//初始化客户地址长度参数
+	iLen = sizeof(cli);
+	//初始化接收缓冲区
+	memset(recv_buf, 0, sizeof(recv_buf));
+
+	
+	sAccept = accept(sListen, (struct sockaddr*)&cli, &iLen);
+	if (sAccept == INVALID_SOCKET)
+	{
+		printf("ACCEPT()failed.:%d\n", WSAGetLastError());
+		//break;
+	}
+	while(1)
+	{ 
+		//从客户端接收数据
+		iLen = recv(sAccept, recv_buf, sizeof(recv_buf), 0);
+		if (iLen == 0)
+			return;
+		else if (iLen == SOCKET_ERROR)
+		{
+			printf("recv()Failed:%\n", WSAGetLastError());
+			return;
+		}
+		else
+		{
+			if (recv_buf[strlen(recv_buf)-1]=='#')
+			{
+				printf("关闭.\n"); break;
+			}
+			else
+				printf("%s:%s\n", recv_user,recv_buf);
+		}
+	}
+	closesocket(sAccept);
+
+	closesocket(sListen);
+	WSACleanup();
+}
+
+
+
+
