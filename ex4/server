@@ -1,0 +1,163 @@
+#include<Winsock2.h>
+#include<stdio.h>
+#include<iostream>
+#include<fstream>
+#include<stdlib.h>
+#include<time.h>
+#include<map>
+#include<vector>
+#include<string>
+#define DEFAULT_PORT 5051
+#define BUFFER_LENGTH 1024
+using namespace std;
+#pragma comment(lib,"ws2_32.lib")
+
+//444 第三方服务器
+struct USER {
+	char name[20];
+	sockaddr_in ip_iport;
+}tmp;
+
+void main()
+{
+	//map<sockaddr_in,string>::iterator iter;
+	int iPort = DEFAULT_PORT;
+	WSADATA wsaData;
+	SOCKET sSocket;
+	int iLen;
+	int iSend;
+	int iRecv;
+	char show_buf[BUFFER_LENGTH];
+	char send_buf[BUFFER_LENGTH];
+	char recv_buf[BUFFER_LENGTH];
+	vector<USER> Users;
+	vector<USER>::iterator iter;
+
+	time_t rawtime;
+	time(&rawtime);
+	char   recv_time[20];
+	struct sockaddr_in ser;
+	printf("-------------------\n");
+	printf("Sever waiting\n");
+	printf("-------------------\n");
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf("Failed to load winsock.\n");
+		return;
+	}
+	//创建服务器套接口
+	sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sSocket == INVALID_SOCKET)
+	{
+		printf("socket() Failed:%d\n", WSAGetLastError());
+		return;
+	}
+	//建立服务器端地址
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind()Failed:%d\n", WSAGetLastError());
+		return;
+	}
+
+	while (1)
+	{
+		//初始化接收缓冲区
+		memset(recv_buf, 0, sizeof(recv_buf));
+		//从客户端接收数据
+		struct sockaddr_in cli;
+		iLen = sizeof(cli);
+		iRecv = recvfrom(sSocket, recv_buf, BUFFER_LENGTH, 0, (SOCKADDR*)&cli, &iLen);
+		if (iRecv == SOCKET_ERROR)
+		{
+			printf("recvfrom()failed111.:%d\n", WSAGetLastError());
+			continue;
+		}
+		else if (iRecv == 0)
+			break;
+		else
+		{
+			//用户加入会话 将客户端传输的IP地址存入vector
+			if (recv_buf[0] == '@')
+			{
+				strcpy(tmp.name, recv_buf + 1);
+				tmp.ip_iport.sin_family = AF_INET;
+				tmp.ip_iport.sin_addr.s_addr = inet_addr(inet_ntoa(cli.sin_addr));
+				tmp.ip_iport.sin_port = htons(5052);//注意端口号的改变
+				Users.push_back(tmp);
+				strftime(recv_time, 20, "%Y-%m-%d %X", localtime(&rawtime));
+				sprintf(show_buf, "%s IP:[%s] %s 加入会话", recv_time, inet_ntoa(tmp.ip_iport.sin_addr), tmp.name);
+				printf("%s\n", show_buf);
+				sprintf(send_buf, "%s %s 加入会话", recv_time, tmp.name);
+				for (iter = Users.begin(); iter != Users.end(); iter++) {
+					//发送给对方服务器
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));
+					if (iSend == SOCKET_ERROR)
+					{
+						printf("sendto() Failed.:%d\n", WSAGetLastError());
+						break;
+					}
+					else if (iSend == 0) {
+						break;
+					}
+					else
+					{
+					}
+				}
+			}
+
+			//关闭会话窗口
+			else if (recv_buf[strlen(recv_buf) - 1] == '#')
+			{
+				string s1 = inet_ntoa(cli.sin_addr);
+
+				for (iter = Users.begin(); iter != Users.end(); iter++) {
+					string s2 = inet_ntoa(iter->ip_iport.sin_addr);
+					if (s1 == s2)
+						break;
+				}
+				//删除关闭会话用户的IP
+				iSend = sendto(sSocket, "#", sizeof("#"), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));
+				Users.erase(iter);
+
+				strftime(recv_time, 20, "%Y-%m-%d %X", localtime(&rawtime));
+				sprintf(show_buf, "%s %s IP:[%s] 结束会话", recv_time, inet_ntoa(iter->ip_iport.sin_addr), iter->name);
+				printf("%s\n", show_buf);
+				sprintf(send_buf, "%s %s结束会话", recv_time, iter->name);
+				for (iter = Users.begin(); iter != Users.end(); iter++) {
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));//发送给对方服务器
+				}
+			}
+
+			//接收用户会话
+			else
+			{
+
+				for (iter = Users.begin(); iter != Users.end(); iter++) {
+					string s1 = inet_ntoa(iter->ip_iport.sin_addr);
+					string s2 = inet_ntoa(cli.sin_addr);
+					if (s1 == s2)
+						break;
+				}
+				//生成接收信息的时间
+				strftime(recv_time, 20, "%Y-%m-%d %X", localtime(&rawtime));
+				sprintf(show_buf, "%s IP:[%s] %s :%s", recv_time, inet_ntoa(iter->ip_iport.sin_addr), iter->name, recv_buf);
+				printf("%s\n", show_buf);
+				sprintf(send_buf, "%s %s :%s", recv_time, iter->name, recv_buf);
+				for (iter = Users.begin(); iter != Users.end(); iter++) {
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));//发送给对方服务器
+				}
+			}
+		}
+	}
+	closesocket(sSocket);
+	WSACleanup();
+}
+
+
+
+
+
+
