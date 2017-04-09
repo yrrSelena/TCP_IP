@@ -1,0 +1,316 @@
+#include<Winsock2.h>
+#include<iostream>
+#include<stdio.h>
+#include<stdlib.h>
+#include<cstring>
+#include <vector>
+#include <algorithm>
+#define DEFAULT_PORT 5051
+#define BUFFER_LENGTH 1024
+#define CLI_PORT 5052
+#define MAX_user 100
+#pragma comment(lib,"ws2_32.lib")
+using namespace std;
+
+struct User{
+	sockaddr_in ip_iport;
+	string name;
+	string mima;
+	int vis = 0;
+}tmp;
+
+
+int main()
+{
+	const char Flag_user[] = "~~~";
+	int iPort = DEFAULT_PORT;
+	WSADATA wsaData;
+	SOCKET sSocket;
+	struct sockaddr_in ser;
+
+	int iLen;
+	int iSend;
+	int iRecv;
+	char send_buf[BUFFER_LENGTH], recv_buf[BUFFER_LENGTH];
+	char recv_name[BUFFER_LENGTH], recv_mima[BUFFER_LENGTH];
+	char cmp[20] = {};
+    char flag_buf[30];
+
+	vector<User> user;
+	vector<User>::iterator iter;
+	char  readname[100], readmima[100];
+	FILE *fp = fopen("D:\\in2.txt", "r+");
+	if (!fp){
+		printf("无法打开文件！\n");
+		return -1;
+	}
+	while (!feof(fp))
+	{
+		fscanf(fp, "%s", readname);
+		tmp.name = readname;
+		fscanf(fp, "%s", readmima);
+		tmp.mima = readmima;
+		tmp.vis = 0;
+		user.push_back(tmp);
+	}
+	//    fclose(fp);
+	//    //fflush(stdin);
+	//    fp = fopen( "C:\\in.txt", "r+" );
+	//    if (!fp){
+	//		printf("无法打开文件！\n");
+	//		return -1;
+	//	}
+
+	printf("-------------------\n");
+	printf("Sever waiting\n");
+	printf("-------------------\n");
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf("Failed to load winsock.\n");
+		return 0;
+	}
+	sSocket = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sSocket == INVALID_SOCKET)
+	{
+		printf("socket() Failed:%d\n", WSAGetLastError());
+		return 0;
+	}
+	ser.sin_family = AF_INET;
+	ser.sin_port = htons(iPort);
+	ser.sin_addr.s_addr = htonl(INADDR_ANY);
+	if (bind(sSocket, (LPSOCKADDR)&ser, sizeof(ser)) == SOCKET_ERROR)
+	{
+		printf("bind()Failed:%d\n", WSAGetLastError());
+		return 0;
+	}
+
+	memset(recv_buf, 0, sizeof(recv_buf));
+
+	while (1)
+	{
+		struct sockaddr_in  cli;
+		iLen = sizeof(cli);
+		iRecv = recvfrom(sSocket, recv_buf, BUFFER_LENGTH, 0,
+			(SOCKADDR*)&cli, &iLen);
+		SYSTEMTIME st = { 0 };
+		GetLocalTime(&st);
+		if (iRecv == SOCKET_ERROR)
+		{
+			printf("【%02d:%02d:%02d】 对方服务器未打开，错误类型号:%d\n",
+				st.wHour,
+				st.wMinute,
+				st.wSecond,
+				WSAGetLastError());
+			continue;
+		}
+		else if (iRecv == 0)
+			break;
+		else
+		{
+			strncpy(cmp, recv_buf, sizeof(Flag_user)-1);
+			if (strcmp(cmp, "~~~") == 0){//用户登录
+				int namenumber = 0;
+				for (int i = 3; i < strlen(recv_buf); i++){
+					if (recv_buf[i] == '.')
+					{
+						namenumber = i;
+					}
+				}
+				for (int i = 3; i < namenumber; i++){
+					recv_name[i - 3] = recv_buf[i];
+				}
+				recv_name[namenumber - 3] = '\0';
+				int mimalength = 0;
+				for (int i = namenumber + 1; i <= strlen(recv_buf) + 1; i++)
+				{
+					recv_mima[mimalength++] = recv_buf[i];
+				}
+				recv_mima[mimalength] = '\0';
+
+
+				cout << recv_name << recv_mima << endl;
+				int yidenglu = 0, weizhuce = 0, mimacuowu = 0;
+
+				for (iter = user.begin(); iter != user.end(); iter++){
+					//    cout<<iter->name<<iter->mima<<" "<<iter->vis<<endl;
+					if (recv_name == iter->name&&recv_mima == iter->mima){
+						if (iter->vis == 1)
+						{
+							cout << 1 << endl;
+							yidenglu = 1;
+						}
+						break;
+					}
+				}
+				if (iter == user.end())
+				{
+					weizhuce = 1;
+				}
+				if (weizhuce)
+				{
+					sprintf(send_buf, "【%02d:%02d:%02d】 用户名或密码错误！\n",
+						st.wHour,
+						st.wMinute,
+						st.wSecond);
+					printf("%s", send_buf);
+					strcpy(flag_buf,"fail");
+					iSend = sendto(sSocket, flag_buf, sizeof(flag_buf), 0, (struct sockaddr*)&cli, sizeof(cli));
+					cli.sin_port =  htons(CLI_PORT);
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&cli, sizeof(cli));//发送给对方服务器
+					continue;
+				}
+				if (yidenglu == 0){
+
+					iter->ip_iport.sin_addr.s_addr = inet_addr(inet_ntoa(cli.sin_addr));
+					iter->ip_iport.sin_port = htons(CLI_PORT);
+					iter->ip_iport.sin_family = AF_INET;
+					iter->vis = 1;
+					// cout<<iter->name<<endl;
+
+					sprintf(send_buf, "【%02d:%02d:%02d】 %s IP:[%s],port:[%d]登录成功!!!\n",
+						st.wHour, st.wMinute, st.wSecond, iter->name.c_str(),
+						inet_ntoa(iter->ip_iport.sin_addr),
+						ntohs(iter->ip_iport.sin_port));
+                    char flag_buf[50];
+                    strcpy(flag_buf,"succeed");
+                    cout<<"  xx:"<<flag_buf<<endl;
+					iSend = sendto(sSocket, flag_buf, sizeof(flag_buf), 0, (struct sockaddr*)&cli, sizeof(cli));
+					printf("%s", send_buf);
+
+					for (iter = user.begin(); iter != user.end(); iter++){
+
+						if (iter->vis)
+						{
+							iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));//发送给对方服务器
+							if (iSend == SOCKET_ERROR)
+							{
+								printf("sendto() Failed.:%d\n", WSAGetLastError());
+								break;
+							}
+							else if (iSend == 0){
+								break;
+							}
+						}
+					}
+				}
+				else{
+					sprintf(send_buf, "【%02d:%02d:%02d】 用户已登录！！！\n",
+						st.wHour,
+						st.wMinute,
+						st.wSecond);
+					printf("%s", send_buf);
+					strcpy(flag_buf,"fail");
+					iSend = sendto(sSocket, flag_buf, sizeof(flag_buf), 0, (struct sockaddr*)&cli, sizeof(cli));
+					cli.sin_port =  htons(CLI_PORT);
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&cli, sizeof(cli));//发送给对方服务器
+				}
+			}
+			else if (strcmp(cmp, "***") == 0)//用户注册
+			{
+				int namenumber = 0;
+				for (int i = 3; i < strlen(recv_buf); i++){
+					if (recv_buf[i] == '.')
+					{
+						namenumber = i;
+					}
+				}
+				for (int i = 3; i < namenumber; i++){
+					recv_name[i - 3] = recv_buf[i];
+				}
+				recv_name[namenumber - 3] = '\0';
+				int mimalength = 0;
+				for (int i = namenumber + 1; i <= strlen(recv_buf) + 1; i++)
+				{
+					recv_mima[mimalength++] = recv_buf[i];
+				}
+				recv_mima[mimalength] = '\0';
+
+				for (iter = user.begin(); iter != user.end(); iter++){
+					if (recv_name == iter->name){
+						sprintf(send_buf, "【%02d:%02d:%02d】 用户名已注册！！！\n",
+							st.wHour,
+							st.wMinute,
+							st.wSecond);
+						printf("%s", send_buf);
+						strcpy(flag_buf,"fail");
+                        iSend = sendto(sSocket, flag_buf, sizeof(flag_buf), 0, (struct sockaddr*)&cli, sizeof(cli));
+						cli.sin_port =  htons(CLI_PORT);
+						iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&cli, sizeof(cli));//发送给对方服务器
+						break;
+					}
+				}
+				if (iter == user.end())
+				{
+					tmp.ip_iport.sin_addr.s_addr = inet_addr(inet_ntoa(cli.sin_addr));
+					tmp.ip_iport.sin_port = htons(CLI_PORT);
+					tmp.ip_iport.sin_family = AF_INET;
+					tmp.name = recv_name; tmp.mima = recv_mima; tmp.vis = 0;
+					user.push_back(tmp);
+					sprintf(send_buf, "【%02d:%02d:%02d】 用户注册成功！！！\n", st.wHour, st.wMinute, st.wSecond);
+					printf("%s", send_buf);
+                    strcpy(flag_buf,"succeed");
+					iSend = sendto(sSocket, flag_buf, sizeof(flag_buf), 0, (struct sockaddr*)&cli, sizeof(cli));
+					cli.sin_port = htons(CLI_PORT);
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&cli, sizeof(cli));//发送给对方服务器
+					printf("%s\n%s\n", recv_name, recv_mima);
+					fprintf(fp, "%s\n%s\n", recv_name, recv_mima);
+				}
+			}
+			else if (strcmp(recv_buf, "close") == 0){//用户退出
+				for (iter = user.begin(); iter != user.end(); iter++){
+					if (iter->name == recv_name&&iter->vis)
+						break;
+				}
+				if (iter == user.end()){
+					sprintf(send_buf, "\n");
+					printf("%s", send_buf);
+					strcpy(flag_buf,"fail");
+					iSend = sendto(sSocket, flag_buf, sizeof(flag_buf), 0, (struct sockaddr*)&cli, sizeof(cli));
+					cli.sin_port =  htons(CLI_PORT);
+					iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&cli, sizeof(cli));//发送给对方服务器
+					continue;
+				}
+				sprintf(send_buf, "【%02d:%02d:%02d】 %s IP:[%s]已下线！\n",
+					st.wHour,
+					st.wMinute,
+					st.wSecond, iter->name.c_str(), inet_ntoa(iter->ip_iport.sin_addr));
+				printf("%s", send_buf);
+				iter->vis = 0;
+				//cout<<iter->name<<" "<<iter->vis<<endl;
+				char flag[] = "close";
+				iSend = sendto(sSocket, flag, sizeof(flag), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));
+				for (iter = user.begin(); iter != user.end(); iter++){
+					if (iter->vis == 1)
+						iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));//发送给对方服务器
+				}
+
+			}
+			else{//用户正常发送消息
+                string s1,s2;
+                s2 = inet_ntoa(cli.sin_addr);
+				for (iter = user.begin(); iter != user.end(); iter++){
+				    s1 =inet_ntoa(iter->ip_iport.sin_addr);
+					if (s1==s2)
+						break;
+				}
+				if (iter == user.end()) continue;
+				sprintf(send_buf, "【%02d:%02d:%02d】 %s  :%s\n", st.wHour, st.wMinute,
+					st.wSecond, iter->name.c_str(),  recv_buf);
+				printf("%s", send_buf);
+				for (iter = user.begin(); iter != user.end(); iter++){
+					if (iter->vis == 1)
+					{
+						iSend = sendto(sSocket, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&iter->ip_iport, sizeof(iter->ip_iport));//发送给对方服务器
+					}
+				}
+			}
+		}
+	}
+	closesocket(sSocket);
+	WSACleanup();
+}
+
+
+
+
+
