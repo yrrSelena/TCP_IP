@@ -1,0 +1,223 @@
+#include<Winsock2.h>
+#include<stdio.h>
+#include<iostream>
+#pragma comment(lib,"ws2_32.lib")
+#define DEFAULT_PORT 5051
+#define DATA_BUFFER 1024
+#define BUFFER_LENGTH 1024
+using namespace std;
+
+WSADATA wsaData;
+SOCKET sClient;
+int iPort = DEFAULT_PORT;
+int iLen;
+int iLen2;
+int iSend;
+int iRecv;
+char ip[20];
+char ip2[20];
+char send_buf[100] = "~~~";
+char send_per_fu[30];
+char recv_buf[DATA_BUFFER];
+struct sockaddr_in ser;
+int flag = 1;
+
+int Enter()
+{
+	//cout << "是否进入聊天窗口：(1:进入 ， 2：重新登录)" << endl;
+	//scanf("%d", &flag);
+	memset(send_buf, 0, sizeof(send_buf));
+
+	iLen = sizeof(ser);
+	//if(flag==1)
+	cout << "----------进入聊天界面：----------" << endl;
+	do {
+		cout << "请选择聊天类型:(1：群聊 2：私聊 3:查询在线用户信息 4：结束会话 #:取消当前聊天类型)" << endl;
+		int choice;
+		cin >> choice;
+		char send[1000],user[20];
+		//群聊
+		if (choice == 1)
+		{
+			cout << "----------群聊-------------" << endl;
+			do {
+				cout << "群聊消息：";
+				cin >> send;
+				sprintf(send_buf, "^%s", send);
+				if (strcmp(send, "#") == 0)
+					break;
+				iSend = sendto(sClient, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&ser, iLen);//发送给对方服务器
+				if (iSend == SOCKET_ERROR)
+				{
+					printf("sendto()Failed:%d\n", WSAGetLastError());
+					return 0;
+				}
+				else if (iSend == 0)
+				{
+					return 0;
+				}
+				else
+				{
+				}
+			} while (1);
+
+		}
+		//私聊
+		else if (choice == 2)
+		{
+			cout << "----------私聊-------------" << endl;
+			cout << "私聊用户:" ;
+			cin >> user;
+			do {
+				cout<<"消息：";
+				cin >> send;
+				if (strcmp(send, "#") == 0)
+					break;
+				sprintf(send_buf, "$%s.%s", user,send);
+				iSend = sendto(sClient, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&ser, iLen);//发送给对方服务器
+				if (iSend == SOCKET_ERROR)
+				{
+					printf("sendto()Failed:%d\n", WSAGetLastError());
+					return 0;
+				}
+				else if (iSend == 0)
+				{
+					return 0;
+				}
+				else
+				{
+				}
+			} while (1);
+		}
+		//查询在线用户信息
+		else if (choice == 3)
+		{
+			cout << "----------在线用户信息---------" << endl;
+			iSend = sendto(sClient, "@", sizeof("@"), 0, (struct sockaddr*)&ser, iLen);//发送给对方服务器
+			if (iSend == SOCKET_ERROR)
+			{
+				printf("sendto()Failed:%d\n", WSAGetLastError());
+				return 0;
+			}
+			else if (iSend == 0)
+			{
+				return 0;
+			}
+			else
+			{
+			}
+
+		}
+		else if (choice == 4)
+		{
+			iSend = sendto(sClient, "close", sizeof("close"), 0, (struct sockaddr*)&ser, iLen);//发送给对方服务器
+			if (iSend == SOCKET_ERROR)
+			{
+				printf("sendto()Failed:%d\n", WSAGetLastError());
+				return 0;
+			}
+			else if (iSend == 0)
+			{
+				return 0;
+			}
+			else
+			{
+			}
+			break;
+		}
+
+	} while (1);
+	return 0;
+}
+
+int main()
+{
+	errno_t err;
+	FILE *fp;
+	err = fopen_s(&fp, "in.txt", "r");
+	if (!fp) {
+		printf("无法打开文件！\n");
+		return -1;
+	}
+	//freopen("in1.txt", "r", stdin);//修改-----------------------
+	memset(recv_buf, 0, sizeof(recv_buf));
+	if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf("Failed to load Winsock.\n");
+		return 0;
+	}
+	ser.sin_family = AF_INET;
+	//	cout << "服务器iport端口：" << endl;
+	fscanf(fp, "%d", &iPort);
+	//	cout << iPort << endl;
+	cout << "服务器 ip 地址：" << endl;
+	fscanf(fp, "%s", &ip);
+	cout << ip << endl;
+	//	strcpy(send_per, strcat(send_per, ":"));
+
+
+	ser.sin_port = htons(5051);
+	ser.sin_addr.s_addr = inet_addr(ip);
+	sClient = socket(AF_INET, SOCK_DGRAM, 0);
+	if (sClient == INVALID_SOCKET)
+	{
+		printf("socket()Failed:%d\n", WSAGetLastError());
+		return 0;
+	}
+	iLen = sizeof(ser);
+
+	struct sockaddr_in cli;
+
+	char name[30], cipher[30];
+	while (flag != 3) {
+
+		cout << "选择操作（1：注册； 2：登陆； 3：退出）" << endl;
+		scanf("%d", &flag);
+		if (flag == 1) {
+			cout << "输入用户名：" << endl;
+			scanf("%s", name);
+			cout << "输入密  码：" << endl;
+			scanf("%s", cipher);
+			sprintf(send_buf, "***%s.%s", name, cipher);
+			iSend = sendto(sClient, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&ser, iLen);//发送给对方服务器
+			iRecv = recvfrom(sClient, recv_buf, BUFFER_LENGTH, 0, (SOCKADDR*)&ser, &iLen);
+			if (strcmp(recv_buf, "succeed") == 0)
+			{
+				continue;//Enter();
+			}
+			else if (strcmp(recv_buf, "fail") == 0)
+			{
+				cout << "注册失败" << endl;
+				continue;
+			}
+		}
+		else if (flag == 2) {
+			cout << "输入用户名：" << endl;
+			scanf("%s", name);
+			cout << "输入密  码：" << endl;
+			scanf("%s", cipher);
+			sprintf(send_buf, "~~~%s.%s", name, cipher);
+			iSend = sendto(sClient, send_buf, sizeof(send_buf), 0, (struct sockaddr*)&ser, iLen);//发送给对方服务器
+			//cout << send_buf << endl;
+			iRecv = recvfrom(sClient, recv_buf, BUFFER_LENGTH, 0, (SOCKADDR*)&ser, &iLen);
+			if (strcmp(recv_buf, "succeed") == 0)
+			{
+				Enter();
+			}
+			else if (strcmp(recv_buf, "fail") == 0)
+			{
+				cout << "登录失败" << endl;
+				continue;
+			}
+		}
+		else if (flag == 3)
+		{
+			break;
+		}
+
+	}
+	//fclose(stdin);
+	closesocket(sClient);
+	WSACleanup();
+
+}
